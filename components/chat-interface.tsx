@@ -246,12 +246,19 @@ Available locations:
 ${getAvailableScenes().map(scene => `- ${scene.name}: ${scene.description}`).join("\n")}
 
 Rules:
+- Responses meant for the user should be concise and not too long.
 - Only move the story to a new location if the user clearly prompts for it (such as with *travel to X* or similar action cues).
-- If the user writes text between asterisks (*like this*), treat it as an action the player is taking, and paint it vividly in your response.
-- describe your own actions and the world in your responses, not just dialogue.
+- If the user writes text between asterisks (*like this*) or only performs an action, respond as the narrator and briefly acknowledge the action.
+- If the user speaks directly to a champion, respond as that champion.
+- If the user mentions a champion's name but does NOT directly address them, respond as the narrator (not the champion). The narrator may briefly describe the champion's presence or reaction, but should not have the champion speak unless directly addressed.
+- If the user tries to interact with unknown or unavailable characters, respond as the narrator and gently hint toward known/available champions (for example, suggest who is nearby or who the player could talk to).
+- You may describe your own actions, but keep them brief and relevant to the conversation.
+- Occasionally invent or escalate events, conflicts, or surprises to keep the story engaging and dynamic for the user. This could include unexpected encounters, sudden dangers, or new opportunities. Make sure these events fit the League of Legends universe and the current scene.
 - Keep a running summary of the story so far and what has happened at each location. You may write a short summary to yourself at the end of each response, but do not show it to the user.
-- At the start of every reply, always explicitly state the current location using the format: **Location:** <location name>. If the player is not in any of the known locations, use **Location:** Other.
-- keep track of what character is where, and if they move to a new location, explain how they got there when relevant to the user. 
+- At the start of every reply, always explicitly state the current location using the format: **Location:** <location name>, immediately followed by the speaker using the format: **<Speaker>:** (e.g., **Location:** Piltover Plaza\n**Vi:**). This order is required for every reply.
+- If the player is not in any of the known locations, use **Location:** Other.
+- Keep track of what character is where, and if they move to a new location, explain how they got there when relevant to the user.
+- IMPORTANT: Always use the above order and format for every reply so the UI can reliably extract both location and speaker.
 
 ${summarizeGameState(gameState)}
 
@@ -419,7 +426,7 @@ ${summarizeStory(messages, getSceneNameMap())}
       ...prev,
       {
         id: typingId,
-        sender: respondingCharacter,
+        sender: "", // blank sender for loading
         text: "",
         timestamp: Date.now(),
         isTyping: true,
@@ -499,7 +506,7 @@ ${summarizeStory(messages, getSceneNameMap())}
       ...prev,
       {
         id: typingId,
-        sender: lastAIMessage.sender,
+        sender: "", // blank sender for loading
         text: "",
         timestamp: Date.now(),
         isTyping: true,
@@ -582,6 +589,70 @@ ${summarizeStory(messages, getSceneNameMap())}
     return null;
   }
 
+  // Utility: Parse the speaker from the start of the AI's response (e.g., **Vi:**, **Jinx:**, **Narrator:**)
+  function parseSpeakerFromResponse(response: string): string {
+    const match = response.match(/^\*\*(.+?):\*\*/);
+    if (match) {
+      const speakerName = match[1].trim().toLowerCase();
+      // Try to match to a known character key
+      for (const key of Object.keys(characters)) {
+        if (characters[key].name.toLowerCase() === speakerName) {
+          return key;
+        }
+      }
+      if (speakerName === "narrator") return "narrator";
+    }
+    // Fallback: narrator
+    return "narrator";
+  }
+
+  // Utility: Parse the location and speaker from the start of the AI's response (robust to stray lines)
+  function parseLocationAndSpeakerFromResponse(response: string): { location: string | null, speaker: string } {
+    // Split into lines and look for the first line that starts with **Location:**
+    const lines = response.split(/\r?\n/);
+    let locLineIdx = -1;
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].trim().startsWith('**Location:**')) {
+        locLineIdx = i;
+        break;
+      }
+    }
+    if (locLineIdx !== -1 && lines.length > locLineIdx + 1) {
+      // Parse location
+      const locMatch = lines[locLineIdx].match(/^\*\*Location:\*\*\s*([^\n*]+)/);
+      const speakerMatch = lines[locLineIdx + 1].match(/^\*\*(.+?):\*\*/);
+      if (locMatch && speakerMatch) {
+        const locationName = locMatch[1].trim();
+        const speakerName = speakerMatch[1].trim().toLowerCase();
+        // Try to match to a known character key
+        let speakerKey = "narrator";
+        for (const key of Object.keys(characters)) {
+          if (characters[key].name.toLowerCase() === speakerName) {
+            speakerKey = key;
+            break;
+          }
+        }
+        if (speakerName === "narrator") speakerKey = "narrator";
+        return { location: locationName, speaker: speakerKey };
+      }
+    }
+    // Fallback: try to match just the speaker anywhere in the text
+    const speakerMatch = response.match(/^\*\*(.+?):\*\*/m);
+    if (speakerMatch) {
+      const speakerName = speakerMatch[1].trim().toLowerCase();
+      let speakerKey = "narrator";
+      for (const key of Object.keys(characters)) {
+        if (characters[key].name.toLowerCase() === speakerName) {
+          speakerKey = key;
+          break;
+        }
+      }
+      if (speakerName === "narrator") speakerKey = "narrator";
+      return { location: null, speaker: speakerKey };
+    }
+    return { location: null, speaker: "narrator" };
+  }
+
   const handleSendMessage = async () => {
     if (inputValue.trim() === "" || isProcessing) return
     const userMessage: Message = {
@@ -600,12 +671,12 @@ ${summarizeStory(messages, getSceneNameMap())}
     setInputValue("")
     setIsProcessing(true)
     const typingId = (Date.now() + 1).toString()
-    const respondingCharacter = determineRespondingCharacter(inputValue, gameState, messages)
+    // Set sender to blank for loading/typing message
     ;(setMessages as React.Dispatch<React.SetStateAction<Message[]>>)((prev: Message[]) => [
       ...prev,
       {
         id: typingId,
-        sender: respondingCharacter,
+        sender: "", // blank sender for loading
         text: "",
         timestamp: Date.now(),
         isTyping: true,
@@ -616,18 +687,23 @@ ${summarizeStory(messages, getSceneNameMap())}
       const response = await getGeminiChatResponse(llmMessages, OPENROUTER_API_KEY)
       console.log("LLM response:", response)
       ;(setMessages as React.Dispatch<React.SetStateAction<Message[]>>)((prev: Message[]) => prev.filter((m: Message) => m.id !== typingId))
+      // Parse the location and speaker from the response
+      const { location: parsedLocation, speaker: parsedSender } = parseLocationAndSpeakerFromResponse(response);
+      // Optionally update location if parsedLocation matches a known scene
+      if (parsedLocation) {
+        const scenes = getAvailableScenes();
+        const matchedScene = scenes.find(scene => scene.name.toLowerCase() === parsedLocation.toLowerCase());
+        if (matchedScene && matchedScene.id !== gameState.currentScene) {
+          setGameState({ ...gameState, currentScene: matchedScene.id });
+        }
+      }
       const responseMessage: Message = {
         id: (Date.now() + 2).toString(),
-        sender: respondingCharacter,
+        sender: parsedSender,
         text: response,
         timestamp: Date.now(),
       }
       ;(setMessages as React.Dispatch<React.SetStateAction<Message[]>>)((prev: Message[]) => [...prev, responseMessage])
-      // Check for location change in AI response
-      const aiLocation = extractSceneIdFromText(response);
-      if (aiLocation && aiLocation !== gameState.currentScene) {
-        setGameState({ ...gameState, currentScene: aiLocation });
-      }
       await typeOutResponse(setMessages as React.Dispatch<React.SetStateAction<Message[]>>, responseMessage, response, textSpeed)
     } catch (error) {
       console.error("Error processing message:", error)
@@ -778,23 +854,32 @@ ${summarizeStory(messages, getSceneNameMap())}
                 ) : (
                   <div className="flex items-start gap-3">
                     <Avatar className="h-12 w-12 border-2 border-white/50">
-                      <AvatarImage
-                        src={getCharacter(message.sender)?.avatar || "/placeholder.svg"}
-                        alt={getCharacter(message.sender)?.name}
-                      />
-                      <AvatarFallback>{getCharacter(message.sender)?.name[0]}</AvatarFallback>
+                      {message.sender === "" ? (
+                        // Blank avatar for loading
+                        <div className="h-12 w-12 bg-transparent" />
+                      ) : (
+                        <>
+                          <AvatarImage
+                            src={getCharacter(message.sender)?.avatar || "/placeholder.svg"}
+                            alt={getCharacter(message.sender)?.name}
+                          />
+                          <AvatarFallback>{getCharacter(message.sender)?.name[0]}</AvatarFallback>
+                        </>
+                      )}
                     </Avatar>
                     <div className="flex flex-col">
                       <div className="flex items-center">
-                        <span className="text-base font-semibold text-white/90">
-                          {getCharacter(message.sender)?.name}
-                        </span>
+                        {message.sender !== "" && (
+                          <span className="text-base font-semibold text-white/90">
+                            {getCharacter(message.sender)?.name}
+                          </span>
+                        )}
                       </div>
                       <div
                         className={cn(
                           "relative mt-1 rounded-lg p-3 text-base max-w-[600px]",
                           message.isTyping ? "min-w-[60px]" : "",
-                          `${getCharacter(message.sender)?.color} ${getCharacter(message.sender)?.textColor}`,
+                          message.sender !== "" ? `${getCharacter(message.sender)?.color} ${getCharacter(message.sender)?.textColor}` : "bg-transparent text-transparent"
                         )}
                       >
                         {message.isTyping ? (

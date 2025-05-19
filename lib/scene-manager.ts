@@ -39,7 +39,7 @@ const scenes: Record<string, Scene> = {
     id: "boundary-market",
     name: "Boundary Market",
     description: "A bustling market at the boundary between Piltover and Zaun, where citizens from both cities trade.",
-    backgroundImage: "/images/locations/zaun-piltover-connection-officaljpg.jpg", // best guess for market
+    backgroundImage: "/images/locations/zaun-piltover-connection-offical.jpg", // best guess for market
     availableCharacters: ["caitlyn", "vi", "ekko"],
   },
 }
