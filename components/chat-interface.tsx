@@ -248,9 +248,10 @@ ${getAvailableScenes().map(scene => `- ${scene.name}: ${scene.description}`).joi
 Rules:
 - Only move the story to a new location if the user clearly prompts for it (such as with *travel to X* or similar action cues).
 - If the user writes text between asterisks (*like this*), treat it as an action the player is taking, and paint it vividly in your response.
-- Paint your own actions and the world in your responses, not just dialogue.
+- describe your own actions and the world in your responses, not just dialogue.
 - Keep a running summary of the story so far and what has happened at each location. You may write a short summary to yourself at the end of each response, but do not show it to the user.
 - At the start of every reply, always explicitly state the current location using the format: **Location:** <location name>. If the player is not in any of the known locations, use **Location:** Other.
+- keep track of what character is where, and if they move to a new location, explain how they got there when relevant to the user. 
 
 ${summarizeGameState(gameState)}
 
