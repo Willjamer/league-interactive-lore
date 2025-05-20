@@ -186,7 +186,7 @@ export default function ChatInterface({
 
   useEffect(() => {
     if (gameState.currentScene) {
-      // Debug: log the scene id
+      // Debug: log the scene id ////test
       console.log("Updating background for scene:", gameState.currentScene);
       updateBackgroundRef.current(gameState.currentScene as string);
     }
