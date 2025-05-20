@@ -21,6 +21,7 @@ export default function Home() {
       jayce: 0,
       viktor: 0,
       ekko: 0,
+      heimerdinger: 0, // Added Heimerdinger
     },
     visitedLocations: ["piltover-plaza"],
     inventory: [],
@@ -136,6 +137,7 @@ export default function Home() {
           jayce: 0,
           viktor: 0,
           ekko: 0,
+          heimerdinger: 0, // Added Heimerdinger
         },
         visitedLocations: ["piltover-plaza"],
         inventory: [],
