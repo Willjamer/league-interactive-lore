@@ -1,7 +1,7 @@
 const STORAGE_KEY = "lol-visual-novel-save"
 
 // Update the saveGameProgress function to accept a messages parameter
-export function saveGameProgress(gameState: any, messages: any[] = []): void {
+export function saveGameProgress(gameState: GameState, messages: Message[] = []): void {
   try {
     const serializedState = JSON.stringify({
       gameState,
@@ -15,7 +15,7 @@ export function saveGameProgress(gameState: any, messages: any[] = []): void {
 }
 
 // Update the loadGameProgress function to return both gameState and messages
-export function loadGameProgress(): { gameState: any; messages: any[] } | null {
+export function loadGameProgress(): { gameState: GameState; messages: Message[] } | null {
   try {
     const serializedState = localStorage.getItem(STORAGE_KEY)
     if (!serializedState) return null
@@ -50,7 +50,7 @@ export function deleteSavedGame(): void {
 }
 
 // Update saveGameInSlot to include messages
-export function saveGameInSlot(gameState: any, messages: any[], slotNumber: number): void {
+export function saveGameInSlot(gameState: GameState, messages: Message[], slotNumber: number): void {
   try {
     const slotKey = `${STORAGE_KEY}-slot-${slotNumber}`
     const serializedState = JSON.stringify({
@@ -65,7 +65,7 @@ export function saveGameInSlot(gameState: any, messages: any[], slotNumber: numb
 }
 
 // Update loadGameFromSlot to return messages
-export function loadGameFromSlot(slotNumber: number): { gameState: any; messages: any[] } | null {
+export function loadGameFromSlot(slotNumber: number): { gameState: GameState; messages: Message[] } | null {
   try {
     const slotKey = `${STORAGE_KEY}-slot-${slotNumber}`
     const serializedState = localStorage.getItem(slotKey)
@@ -119,7 +119,7 @@ export function getAllSaveSlots(): Array<{ slot: number; savedAt: string; scene:
 }
 
 // Update the autoSaveGame function to dispatch an event when saving is complete
-export function autoSaveGame(gameState: any, messages: any[]): void {
+export function autoSaveGame(gameState: GameState, messages: Message[]): void {
   try {
     // Use a different key for auto-save to avoid conflicts
     const AUTO_SAVE_KEY = `${STORAGE_KEY}-auto`
@@ -151,7 +151,17 @@ export function autoSaveGame(gameState: any, messages: any[]): void {
 }
 
 // Add a function to load auto-saved game
-export function loadAutoSavedGame(): { gameState: any; messages: any[] } | null {
+interface GameState {
+  currentScene?: string;
+  // Add other properties relevant to your game state here
+}
+
+interface Message {
+  text: string;
+  // Add other properties relevant to your message structure here
+}
+
+export function loadAutoSavedGame(): { gameState: GameState; messages: Message[] } | null {
   try {
     const AUTO_SAVE_KEY = `${STORAGE_KEY}-auto`
     const serializedState = localStorage.getItem(AUTO_SAVE_KEY)

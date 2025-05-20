@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect, useCallback } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -63,10 +63,27 @@ const characters: Record<string, { name: string; avatar: string; color: string; 
   },
 }
 
+// Define GameState type locally since import failed
+
+type GameState = {
+  currentScene: string;
+  characterRelations: {
+    caitlyn: number;
+    vi: number;
+    jinx: number;
+    jayce: number;
+    viktor: number;
+    ekko: number;
+    heimerdinger: number;
+  };
+  visitedLocations: string[];
+  inventory: string[];
+};
+
 // Update the props type to include messages and setMessages
 type ChatInterfaceProps = {
-  gameState: Record<string, unknown>
-  setGameState: (state: Record<string, unknown>) => void
+  gameState: GameState
+  setGameState: React.Dispatch<React.SetStateAction<GameState>>
   updateBackground: (scene: string) => void
   textSpeed?: number
   onMessageUpdate?: (messages: Message[]) => void
@@ -153,7 +170,7 @@ export default function ChatInterface({
     import("@/lib/game-storage").then(({ loadAutoSavedGame }) => {
       const savedData = loadAutoSavedGame()
       if (savedData && savedData.messages && savedData.messages.length > 0) {
-        setMessages(savedData.messages)
+        setMessages(savedData.messages as Message[])
       }
     })
   }
@@ -188,7 +205,7 @@ export default function ChatInterface({
   const availableChampions = Object.keys(characters).filter((c) => c !== "player")
 
   // Utility: Get all available locations and their descriptions
-  const availableLocations = getAvailableScenes().map((scene) => `${scene.name}: ${scene.description}`).join("\n")
+  // (removed unused availableLocations variable)
 
   // Utility: Summarize game state for the prompt
   function summarizeGameState(state: Record<string, unknown>) {
@@ -447,8 +464,7 @@ ${summarizeStory(messages, getSceneNameMap())}
     ])
 
     try {
-      // Create a continue prompt based on the conversation context
-      const continuePrompt = "Tell me more."
+      // (Removed unused continuePrompt variable)
 
       // Call the API to get a response
       const llmMessages = buildLLMMessages(messages, SYSTEM_PROMPT)
@@ -583,42 +599,6 @@ ${summarizeStory(messages, getSceneNameMap())}
     }
     return null;
   }
-
-  // Utility: Escape regex special characters in a string
-  function escapeRegExp(str: string) {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  }
-
-  // Utility: Extract scene id from AI response if it contains a location change
-  function extractSceneIdFromText(text: string): string | null {
-    const scenes = getAvailableScenes();
-    for (const scene of scenes) {
-      // Match '**Location:** Piltover Academy' or similar, safely escaping scene name
-      const pattern = new RegExp(`\\*\\*Location:\\*\\*\\s*${escapeRegExp(scene.name)}`, "i");
-      if (pattern.test(text)) {
-        return scene.id;
-      }
-    }
-    return null;
-  }
-
-  // Utility: Parse the speaker from the start of the AI's response (e.g., **Vi:**, **Jinx:**, **Narrator:**)
-  function parseSpeakerFromResponse(response: string): string {
-    const match = response.match(/^\*\*(.+?):\*\*/);
-    if (match) {
-      const speakerName = match[1].trim().toLowerCase();
-      // Try to match to a known character key
-      for (const key of Object.keys(characters)) {
-        if (characters[key].name.toLowerCase() === speakerName) {
-          return key;
-        }
-      }
-      if (speakerName === "narrator") return "narrator";
-    }
-    // Fallback: narrator
-    return "narrator";
-  }
-
   // Utility: Parse the location and speaker from the start of the AI's response (robust to stray lines)
   function parseLocationAndSpeakerFromResponse(response: string): { location: string | null, speaker: string } {
     // Split into lines and look for the first line that starts with **Location:**

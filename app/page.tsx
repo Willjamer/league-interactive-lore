@@ -1,18 +1,40 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Image from "next/image"
 import ChatInterface from "@/components/chat-interface"
 import GameControls from "@/components/game-controls"
 import { getBackgroundForScene } from "@/lib/scene-manager"
 import { saveGameProgress, loadGameProgress } from "@/lib/game-storage"
-import type { Message } from "@/types/message"
+import type { Message as ImportedMessage } from "@/types/message"
+
+// Ensure Message type has 'sender' property
+type Message = ImportedMessage & {
+  sender: string
+}
+
+// Define GameState type locally since import failed
+type GameState = {
+  currentScene: string;
+  characterRelations: {
+    caitlyn: number;
+    vi: number;
+    jinx: number;
+    jayce: number;
+    viktor: number;
+    ekko: number;
+    heimerdinger: number;
+  };
+  visitedLocations: string[];
+  inventory: string[];
+};
 
 export default function Home() {
   // Add a loading state and indicator
   // Add this state near the top of the component:
   const [isLoading, setIsLoading] = useState(true)
   const [currentBackground, setCurrentBackground] = useState("/images/piltover-plaza.png")
-  const [gameState, setGameState] = useState({
+  const [gameState, setGameState] = useState<GameState>({
     currentScene: "piltover-plaza",
     characterRelations: {
       caitlyn: 0,
@@ -55,33 +77,63 @@ export default function Home() {
 
         if (autoSavedGame && autoSavedGame.messages && autoSavedGame.messages.length > 0) {
           console.log("Loading auto-saved game...")
-          setGameState(autoSavedGame.gameState)
-          setMessages(autoSavedGame.messages)
-          updateBackground(autoSavedGame.gameState.currentScene)
+          setGameState((prev) => ({
+            ...prev,
+            ...autoSavedGame.gameState,
+            characterRelations: {
+              ...prev.characterRelations,
+              ...((autoSavedGame.gameState && (autoSavedGame.gameState as GameState).characterRelations) || {}),
+            },
+            visitedLocations: (autoSavedGame.gameState as GameState).visitedLocations || [],
+            inventory: (autoSavedGame.gameState as GameState).inventory || [],
+          }))
+          setMessages(
+            (autoSavedGame.messages as Message[]).map((m, idx: number) => ({
+              id: m.id ?? String(idx + 1),
+              sender: m.sender ?? "system",
+              text: m.text ?? "",
+              timestamp: m.timestamp ?? Date.now(),
+            }))
+          )
+          updateBackground((autoSavedGame.gameState.currentScene as string) || "piltover-plaza")
 
           // Update current character based on the last message
-          const lastCharacterMessage = [...autoSavedGame.messages]
+            const lastCharacterMessage = ([...autoSavedGame.messages] as Message[])
             .reverse()
             .find((m) => m.sender !== "player" && m.sender !== "system")
 
           if (lastCharacterMessage) {
             setCurrentCharacter(lastCharacterMessage.sender)
           }
-
           setIsLoading(false)
           return // Exit if we loaded auto-save
         }
-
         // If no auto-save, try regular save
         const savedGame = loadGameProgress()
         if (savedGame) {
           console.log("Loading saved game...")
-          setGameState(savedGame.gameState)
+          setGameState((prev) => ({
+            ...prev,
+            ...savedGame.gameState,
+            characterRelations: {
+              ...prev.characterRelations,
+              ...((savedGame.gameState && (savedGame.gameState as GameState).characterRelations) || {}),
+            },
+            visitedLocations: (savedGame.gameState as GameState).visitedLocations || [],
+            inventory: (savedGame.gameState as GameState).inventory || [],
+          }))
           if (savedGame.messages && savedGame.messages.length > 0) {
-            setMessages(savedGame.messages)
+            setMessages(
+              (savedGame.messages as Message[]).map((m, idx: number) => ({
+                id: m.id ?? String(idx + 1),
+                sender: m.sender ?? "system",
+                text: m.text ?? "",
+                timestamp: m.timestamp ?? Date.now(),
+              }))
+            )
 
             // Update current character based on the last message
-            const lastCharacterMessage = [...savedGame.messages]
+            const lastCharacterMessage = ([...savedGame.messages] as Message[])
               .reverse()
               .find((m) => m.sender !== "player" && m.sender !== "system")
 
@@ -89,7 +141,7 @@ export default function Home() {
               setCurrentCharacter(lastCharacterMessage.sender)
             }
           }
-          updateBackground(savedGame.gameState.currentScene)
+          updateBackground((savedGame.gameState.currentScene as string) || "piltover-plaza")
         }
       } catch (error) {
         console.error("Error loading saved game:", error)
@@ -111,11 +163,27 @@ export default function Home() {
   const handleLoadGame = () => {
     const savedGame = loadGameProgress()
     if (savedGame) {
-      setGameState(savedGame.gameState)
+      setGameState((prev) => ({
+        ...prev,
+        ...savedGame.gameState,
+        characterRelations: {
+          ...prev.characterRelations,
+          ...((savedGame.gameState && (savedGame.gameState as GameState).characterRelations) || {}),
+        },
+        visitedLocations: (savedGame.gameState as GameState).visitedLocations || [],
+        inventory: (savedGame.gameState as GameState).inventory || [],
+      }))
       if (savedGame.messages && savedGame.messages.length > 0) {
-        setMessages(savedGame.messages)
+        setMessages(
+          (savedGame.messages as Message[]).map((m, idx: number) => ({
+            id: m.id ?? String(idx + 1),
+            sender: m.sender ?? "system",
+            text: m.text ?? "",
+            timestamp: m.timestamp ?? Date.now(),
+          }))
+        )
       }
-      updateBackground(savedGame.gameState.currentScene)
+      updateBackground((savedGame.gameState.currentScene as string) || "piltover-plaza")
       // Show load confirmation
       alert("Game progress loaded!")
     } else {
@@ -128,7 +196,7 @@ export default function Home() {
     // Confirm with the user before starting a new chat
     if (window.confirm("Are you sure you want to start a new chat? All unsaved progress will be lost.")) {
       // Reset game state to initial values
-      const initialGameState = {
+      const initialGameState: GameState = {
         currentScene: "piltover-plaza",
         characterRelations: {
           caitlyn: 0,
@@ -161,15 +229,6 @@ export default function Home() {
     }
   }
 
-  // Update handleSaveGame to save messages too
-  const handleSaveGame = () => {
-    // Get the current messages from the ChatInterface component
-    // We'll need to pass a ref to access this
-    saveGameProgress(gameState, messages)
-    // Show save confirmation
-    alert("Game progress saved!")
-  }
-
   // Function to update the current character based on the latest message
   const updateCurrentCharacter = (messages: Message[]) => {
     if (messages.length > 0) {
@@ -199,14 +258,14 @@ export default function Home() {
 
       {/* Overlay for better text readability */}
       <div className="absolute inset-0 bg-black/20" />
-
       {/* Character Portrait */}
       <div className="absolute inset-0 flex items-center justify-end pointer-events-none">
-        <img
+        <Image
           src={`/images/${currentCharacter}.png`}
           alt={currentCharacter}
           className="h-full max-h-[100vh] object-contain object-bottom"
-          style={{ marginTop: "0vh" }} // Push the character down a bit
+          fill
+          priority
         />
       </div>
 
@@ -217,8 +276,7 @@ export default function Home() {
         onNewChat={handleNewChat}
         textSpeed={textSpeed}
         onTextSpeedChange={setTextSpeed}
-        messages={messages}
-        currentScene={gameState.currentScene}
+        // Removed messages and currentScene props to match GameControlsProps
       />
 
       {/* Chat Interface */}

@@ -7,7 +7,6 @@ type ChatResponse = {
 export async function getChatResponse(
   message: string,
   currentScene: string,
-  recentMessages: Array<{ sender: string; text: string }>,
 ): Promise<ChatResponse> {
   // Simulate API call delay
   await new Promise((resolve) => setTimeout(resolve, 1000))

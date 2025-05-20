@@ -21,8 +21,6 @@ type GameControlsProps = {
   onNewChat: () => void
   textSpeed?: number
   onTextSpeedChange?: (speed: number) => void
-  messages?: any[]
-  currentScene?: string
 }
 
 // Update the function signature to use these props with defaults
@@ -32,13 +30,12 @@ export default function GameControls({
   onNewChat,
   textSpeed = 15, // Changed default from 30 to 15
   onTextSpeedChange = () => {},
-  messages = [],
-  currentScene = "piltover-plaza",
 }: GameControlsProps) {
-  const [volume, setVolume] = useState(80)
   const [showSettings, setShowSettings] = useState(false)
   // Keep only the UI state for audio - no actual audio playback
   const [isAudioMuted, setIsAudioMuted] = useState(true)
+  // Add volume state for the slider in settings
+  const [volume, setVolume] = useState(50)
 
   // Add a notification when auto-save happens
   const [showAutoSaveNotification, setShowAutoSaveNotification] = useState(false)
