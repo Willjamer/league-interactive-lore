@@ -234,13 +234,26 @@ export default function ChatInterface({
     return map;
   }
 
+  // Utility: Get a short lore description for each character
+  const characterLore: Record<string, string> = {
+    caitlyn: "Caitlyn is the Sheriff of Piltover, renowned for her intelligence, marksmanship, and dedication to justice.",
+    vi: "Vi is a hotheaded enforcer from Zaun, known for her gauntlets, street smarts, and a rough past.",
+    jinx: "Jinx is a manic and impulsive criminal from Zaun, infamous for her chaotic pranks and love of explosions.",
+    jayce: "Jayce is a brilliant inventor and defender of Piltover, wielding a transforming hextech hammer.",
+    viktor: "Viktor is a visionary Zaunite scientist, obsessed with progress and augmenting humanity through technology.",
+    ekko: "Ekko is a prodigy from Zaun who manipulates time with his Zero Drive, fighting for a better future for his friends.",
+    heimerdinger: "Heimerdinger is a brilliant and eccentric yordle inventor from Piltover, known for his boundless curiosity, genius intellect, and love of hextech experimentation.",
+    // Add more as needed
+  };
+
   // System prompt for the LLM to instruct it to act as League of Legends characters and lore expert
   const SYSTEM_PROMPT = `
 You are an interactive League of Legends lore and character expert. Respond as the in-game character, using their voice, personality, and knowledge. Provide lore-accurate, immersive, and engaging responses. If the user asks about the world, events, or other champions, answer in-character and with deep lore insight. Stay in character and make the conversation feel like a real interaction in the League universe.
 
 Game context: This is a narrative-driven interactive chat set in the League of Legends universe. The player can talk to champions, ask about lore, and make choices that affect relationships and story.
 
-Available champions in this session: ${availableChampions.map((c) => characters[c].name).join(", ")}
+Available champions in this session:
+${availableChampions.map((c) => `- ${characters[c].name}: ${characterLore[c] || "No lore available."}`).join("\n")}
 
 Available locations:
 ${getAvailableScenes().map(scene => `- ${scene.name}: ${scene.description}`).join("\n")}

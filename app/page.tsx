@@ -199,12 +199,12 @@ export default function Home() {
       <div className="absolute inset-0 bg-black/20" />
 
       {/* Character Portrait */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+      <div className="absolute inset-0 flex items-center justify-end pointer-events-none">
         <img
           src={`/images/${currentCharacter}.png`}
           alt={currentCharacter}
-          className="h-full max-h-[80vh] object-contain object-bottom"
-          style={{ marginTop: "10vh" }} // Push the character down a bit
+          className="h-full max-h-[100vh] object-contain object-bottom"
+          style={{ marginTop: "0vh" }} // Push the character down a bit
         />
       </div>
 
