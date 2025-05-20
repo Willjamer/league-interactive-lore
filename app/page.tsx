@@ -51,7 +51,7 @@ export default function Home() {
   const [textSpeed, setTextSpeed] = useState(15) // Changed default from 30 to 15
 
   // Add state for the current character being displayed
-  const [currentCharacter, setCurrentCharacter] = useState("caitlyn")
+  const [currentCharacter, setCurrentCharacter] = useState<string | null>("caitlyn")
 
   // Add state for messages at the top level
   const [messages, setMessages] = useState<Message[]>([
@@ -229,14 +229,34 @@ export default function Home() {
     }
   }
 
+  // List of valid character keys that have portraits
+  const validCharacterKeys = [
+    "caitlyn",
+    "vi",
+    "jinx",
+    "jayce",
+    "viktor",
+    "ekko",
+    "heimerdinger"
+  ]
+
   // Function to update the current character based on the latest message
   const updateCurrentCharacter = (messages: Message[]) => {
     if (messages.length > 0) {
-      const lastMessage = messages[messages.length - 1]
-      // If the last message is from a character (not the player), update the current character
-      if (lastMessage.sender !== "player" && lastMessage.sender !== "system") {
-        setCurrentCharacter(lastMessage.sender)
+      // Find the last message from a valid character (not player/system/narrator)
+      const lastCharacterMessage = [...messages].reverse().find(
+        (m) => validCharacterKeys.includes(m.sender)
+      )
+      // Find the last message from the narrator
+      const lastNarratorMessage = [...messages].reverse().find(
+        (m) => m.sender === "narrator"
+      )
+      if (lastNarratorMessage && (!lastCharacterMessage || messages.lastIndexOf(lastNarratorMessage) > messages.lastIndexOf(lastCharacterMessage))) {
+        setCurrentCharacter(null)
+      } else if (lastCharacterMessage) {
+        setCurrentCharacter(lastCharacterMessage.sender)
       }
+      // If neither, do not clear/reset currentCharacter
     }
   }
 
@@ -260,13 +280,15 @@ export default function Home() {
       <div className="absolute inset-0 bg-black/20" />
       {/* Character Portrait */}
       <div className="absolute inset-0 flex items-center justify-end pointer-events-none">
-        <Image
-          src={`/images/${currentCharacter}.png`}
-          alt={currentCharacter}
-          className="h-full max-h-[100vh] object-contain object-bottom"
-          fill
-          priority
-        />
+        {currentCharacter && (
+          <Image
+            src={`/images/${currentCharacter}.png`}
+            alt={currentCharacter}
+            className="h-full max-h-[100vh] object-contain object-bottom"
+            fill
+            priority
+          />
+        )}
       </div>
 
       {/* Game Controls */}

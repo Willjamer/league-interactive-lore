@@ -81,6 +81,7 @@ type GameState = {
 };
 
 // Update the props type to include messages and setMessages
+// Add onCharacterChange prop
 type ChatInterfaceProps = {
   gameState: GameState
   setGameState: React.Dispatch<React.SetStateAction<GameState>>
@@ -89,6 +90,7 @@ type ChatInterfaceProps = {
   onMessageUpdate?: (messages: Message[]) => void
   messages?: Message[]
   setMessages?: (messages: Message[]) => void
+  onCharacterChange?: (character: string) => void // NEW
 }
 
 // Update the function signature to use the new props with defaults
@@ -100,6 +102,7 @@ export default function ChatInterface({
   onMessageUpdate = () => {},
   messages: propMessages,
   setMessages: propSetMessages,
+  onCharacterChange, // NEW
 }: ChatInterfaceProps) {
   // Use the messages from props if provided, otherwise use local state
   const [localMessages, setLocalMessages] = useState<Message[]>([
@@ -126,6 +129,9 @@ export default function ChatInterface({
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const editInputRef = useRef<HTMLInputElement>(null)
+
+  // Track the current character for portrait updates
+  const [currentCharacter, setCurrentCharacter] = useState<string>("caitlyn")
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -261,13 +267,13 @@ export default function ChatInterface({
 
   // Utility: Get a short lore description for each character
   const characterLore: Record<string, string> = {
-    caitlyn: "Caitlyn is the Sheriff of Piltover, renowned for her intelligence, marksmanship, and dedication to justice.",
-    vi: "Vi is a hotheaded enforcer from Zaun, known for her gauntlets, street smarts, and a rough past.",
-    jinx: "Jinx is a manic and impulsive criminal from Zaun, infamous for her chaotic pranks and love of explosions.",
-    jayce: "Jayce is a brilliant inventor and defender of Piltover, wielding a transforming hextech hammer.",
-    viktor: "Viktor is a visionary Zaunite scientist, obsessed with progress and augmenting humanity through technology.",
-    ekko: "Ekko is a prodigy from Zaun who manipulates time with his Zero Drive, fighting for a better future for his friends.",
-    heimerdinger: "Heimerdinger is a brilliant and eccentric yordle inventor from Piltover, known for his boundless curiosity, genius intellect, and love of hextech experimentation.",
+    caitlyn: `Caitlyn (female) is the Sheriff of Piltover, renowned for her intelligence, marksmanship, and dedication to justice. Visual: Tall, elegant woman with long dark hair, a purple Piltover uniform, signature hextech rifle, top hat, and sharp blue eyes.`,
+    vi: `Vi (female) is a hotheaded enforcer from Zaun, known for her gauntlets, street smarts, and a rough past. Visual: Muscular, pink-haired woman with large hextech gauntlets, tattoos on her cheeks, a rebellious look, and a confident stance.`,
+    jinx: `Jinx (female) is a manic and impulsive criminal from Zaun, infamous for her chaotic pranks and love of explosions. Visual: Slender, pale woman with long blue pigtails, wild magenta eyes, blue tattoos on her arms and legs, and a punk outfit with mismatched weapons.`,
+    jayce: `Jayce (male) is a brilliant inventor and defender of Piltover, wielding a transforming hextech hammer. Visual: Tall, athletic man with short brown hair, a white coat, blue eyes, and a large hammer with blue energy.`,
+    viktor: `Viktor (male) is a visionary Zaunite scientist, obsessed with progress and augmenting humanity through technology. Visual: Gaunt man with metal augmentations, a mechanical arm, glowing yellow eye, and a dark cloak.`,
+    ekko: `Ekko (male) is a prodigy from Zaun who manipulates time with his Zero Drive, fighting for a better future for his friends. Visual: Young man with dark skin, white hair styled in a mohawk, blue facial markings, goggles, and a glowing bat-shaped device.`,
+    heimerdinger: `Heimerdinger (male yordle) is a brilliant and eccentric yordle inventor from Piltover, known for his boundless curiosity, genius intellect, and love of hextech experimentation. Visual: Small, furry, male yordle with a huge mustache, fluffy yellow hair, oversized goggles, and expressive ears.`,
     // Add more as needed
   };
 
@@ -446,6 +452,8 @@ ${summarizeStory(messages, getSceneNameMap())}
   }
 
   // Add a function to handle the continue action
+  // Add a special continue prompt for the AI to escalate the scenario
+  const CONTINUE_PROMPT = `Take initiative as the narrator or most relevant character. Escalate or advance the scenario in a lore-appropriate, engaging way. Introduce a new event, conflict, opportunity, or twist that fits the current scene and story. Do not wait for user input. Make the story dynamic and surprising, but always stay true to the League of Legends universe and the current context. Avoid repeating previous events. If a character is present, they may act or speak; otherwise, the narrator should describe what happens next.`;
   const handleContinue = async () => {
     if (isProcessing) return
 
@@ -472,32 +480,44 @@ ${summarizeStory(messages, getSceneNameMap())}
     ])
 
     try {
-      // (Removed unused continuePrompt variable)
-
-      // Call the API to get a response
-      const llmMessages = buildLLMMessages(messages, SYSTEM_PROMPT)
+      // Instead of using the chat history, send a special continue prompt
+      const llmMessages: LLMMessage[] = [
+        { role: "system", content: SYSTEM_PROMPT },
+        ...messages.map((m) => ({
+          role: m.sender === "player" ? "user" as const : "assistant" as const,
+          content: m.text,
+        })),
+        { role: "user", content: CONTINUE_PROMPT },
+      ]
       const response = await getGeminiChatResponse(llmMessages, OPENROUTER_API_KEY)
 
       // Remove typing indicator
       ;(setMessages as React.Dispatch<React.SetStateAction<Message[]>>)((prev: Message[]) => prev.filter((m: Message) => m.id !== typingId))
 
+      // Parse the location and speaker from the response
+      const { location: parsedLocation, speaker: parsedSender } = parseLocationAndSpeakerFromResponse(response);
+      // Optionally update location if parsedLocation matches a known scene
+      if (parsedLocation) {
+        const scenes = getAvailableScenes();
+        const matchedScene = scenes.find(scene => scene.name.toLowerCase() === parsedLocation.toLowerCase());
+        if (matchedScene && matchedScene.id !== gameState.currentScene) {
+          setGameState({ ...gameState, currentScene: matchedScene.id });
+        }
+      }
       // Add the response message with typing effect
       const responseMessage: Message = {
         id: (Date.now() + 2).toString(),
-        sender: respondingCharacter,
+        sender: parsedSender,
         text: response,
         timestamp: Date.now(),
       }
-
       ;(setMessages as React.Dispatch<React.SetStateAction<Message[]>>)((prev: Message[]) => [...prev, responseMessage])
-
       // Simulate typing effect
       await typeOutResponse(setMessages as React.Dispatch<React.SetStateAction<Message[]>>, responseMessage, response, textSpeed)
     } catch (error) {
       console.error("Error getting response:", error)
       // Remove typing indicator
       ;(setMessages as React.Dispatch<React.SetStateAction<Message[]>>)((prev: Message[]) => prev.filter((m: Message) => m.id !== typingId))
-
       // Add error message
       ;(setMessages as React.Dispatch<React.SetStateAction<Message[]>>)((prev: Message[]) => [
         ...prev,
@@ -510,8 +530,6 @@ ${summarizeStory(messages, getSceneNameMap())}
       ])
     } finally {
       setIsProcessing(false)
-
-      // Refocus the input box after processing is complete
       setTimeout(() => {
         inputRef.current?.focus()
       }, 100)
@@ -705,6 +723,10 @@ ${summarizeStory(messages, getSceneNameMap())}
         timestamp: Date.now(),
       }
       ;(setMessages as React.Dispatch<React.SetStateAction<Message[]>>)((prev: Message[]) => [...prev, responseMessage])
+      // Update currentCharacter only after AI response is parsed
+      if (parsedSender !== "player" && parsedSender !== "system") {
+        setCurrentCharacter(parsedSender)
+      }
       await typeOutResponse(setMessages as React.Dispatch<React.SetStateAction<Message[]>>, responseMessage, response, textSpeed)
     } catch (error) {
       console.error("Error processing message:", error)
@@ -763,6 +785,13 @@ ${summarizeStory(messages, getSceneNameMap())}
     // Fallback to narrator if no one is available
     return "narrator";
   };
+
+  // Notify parent when currentCharacter changes
+  useEffect(() => {
+    if (onCharacterChange) {
+      onCharacterChange(currentCharacter)
+    }
+  }, [currentCharacter, onCharacterChange])
 
   return (
     <div className="w-full max-w-4xl flex flex-col">
