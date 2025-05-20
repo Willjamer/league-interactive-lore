@@ -199,7 +199,7 @@ export default function ChatInterface({
   }
 
   // TODO: Replace with a secure way to provide the OpenRouter API key (e.g., env var, serverless function, or user input)
-  const OPENROUTER_API_KEY = process.env.NEXT_PUBLIC_OPENROUTER_API_KEY || "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"
+  const OPENROUTER_API_KEY = process.env.NEXT_PUBLIC_OPENROUTER_API_KEY ?? ""
 
   // Utility: Get available champion names
   const availableChampions = Object.keys(characters).filter((c) => c !== "player")
