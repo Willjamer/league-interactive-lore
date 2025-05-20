@@ -303,11 +303,22 @@ Rules:
 - If the player is not in any of the known locations, use **Location:** Other.
 - Keep track of what character is where, and if they move to a new location, explain how they got there when relevant to the user.
 - IMPORTANT: Always use the above order and format for every reply so the UI can reliably extract both location and speaker.
+- IMPORTANT: The actual message meant for the user must be wrapped in [MESSAGE] and [/MESSAGE] tags. Only the text inside these tags will be shown to the user. Do not include meta information, location, or speaker inside the [MESSAGE] tags. Example:
+**Location:** Piltover Plaza\n**Vi:**\n[MESSAGE]Hey, what brings you to Piltover?[/MESSAGE]
 
 ${summarizeGameState(gameState)}
 
 ${summarizeStory(messages, getSceneNameMap())}
 `;
+
+  // Utility: Extract the user-facing message from AI response
+  function extractBracketedMessage(text: string): string {
+    const match = text.match(/\[MESSAGE\]([\s\S]*?)\[\/MESSAGE\]/i);
+    if (match) {
+      return match[1].trim();
+    }
+    return text; // fallback: show full text if brackets not found
+  }
 
   // Update the handleSaveEdit function to regenerate the AI response after editing
 
@@ -441,13 +452,23 @@ ${summarizeStory(messages, getSceneNameMap())}
     response: string,
     textSpeed: number
   ) {
-    let displayedText = ""
-    for (let i = 0; i < response.length; i++) {
-      displayedText += response[i]
+    // Find the [MESSAGE] and [/MESSAGE] tags
+    const startIdx = response.indexOf('[MESSAGE]');
+    const endIdx = response.indexOf('[/MESSAGE]');
+    let messageContent = '';
+    if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+      messageContent = response.substring(startIdx + 9, endIdx);
+    } else {
+      // fallback: type out the whole response
+      messageContent = response;
+    }
+    let displayedText = '';
+    for (let i = 0; i < messageContent.length; i++) {
+      displayedText += messageContent[i];
       setMessages((prev: Message[]) =>
-        prev.map((m: Message) => (m.id === responseMessage.id ? { ...m, text: displayedText } : m))
-      )
-      await new Promise((resolve) => setTimeout(resolve, textSpeed))
+        prev.map((m: Message) => (m.id === responseMessage.id ? { ...m, text: '[MESSAGE]' + displayedText + '[/MESSAGE]' } : m))
+      );
+      await new Promise((resolve) => setTimeout(resolve, textSpeed));
     }
   }
 
@@ -921,7 +942,10 @@ ${summarizeStory(messages, getSceneNameMap())}
                             ></div>
                           </div>
                         ) : (
-                          message.text
+                          // Only show the bracketed message for AI/system messages (not player)
+                          message.sender !== "player" && message.sender !== "system"
+                            ? extractBracketedMessage(message.text)
+                            : message.text
                         )}
                       </div>
 
