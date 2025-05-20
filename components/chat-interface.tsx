@@ -213,7 +213,7 @@ export default function ChatInterface({
       const maskedKey = OPENROUTER_API_KEY ? OPENROUTER_API_KEY.slice(0, 6) + "..." : "(empty)";
       console.log("[DEBUG] NEXT_PUBLIC_OPENROUTER_API_KEY:", maskedKey);
     }
-  }, []);
+  }, [OPENROUTER_API_KEY]);
 
   // Utility: Get available champion names
   const availableChampions = Object.keys(characters).filter((c) => c !== "player")
@@ -458,13 +458,6 @@ ${summarizeStory(messages, getSceneNameMap())}
     if (isProcessing) return
 
     setIsProcessing(true)
-
-    // Determine which character should respond
-    const lastCharacterMessage = [...messages]
-      .reverse()
-      .find((m) => m.sender !== "player" && m.sender !== "system" && !m.isTyping)
-
-    const respondingCharacter = lastCharacterMessage?.sender || determineRespondingCharacter("", gameState, messages)
 
     // Add typing indicator
     const typingId = Date.now().toString()
