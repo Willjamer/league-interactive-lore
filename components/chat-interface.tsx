@@ -201,6 +201,14 @@ export default function ChatInterface({
   // TODO: Replace with a secure way to provide the OpenRouter API key (e.g., env var, serverless function, or user input)
   const OPENROUTER_API_KEY = process.env.NEXT_PUBLIC_OPENROUTER_API_KEY ?? ""
 
+  // TEMP DEBUG: Log the API key (masked) to check if it is available in production
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const maskedKey = OPENROUTER_API_KEY ? OPENROUTER_API_KEY.slice(0, 6) + "..." : "(empty)";
+      console.log("[DEBUG] NEXT_PUBLIC_OPENROUTER_API_KEY:", maskedKey);
+    }
+  }, []);
+
   // Utility: Get available champion names
   const availableChampions = Object.keys(characters).filter((c) => c !== "player")
 
