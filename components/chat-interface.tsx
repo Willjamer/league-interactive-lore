@@ -65,8 +65,8 @@ const characters: Record<string, { name: string; avatar: string; color: string; 
 
 // Update the props type to include messages and setMessages
 type ChatInterfaceProps = {
-  gameState: any
-  setGameState: (state: any) => void
+  gameState: Record<string, unknown>
+  setGameState: (state: Record<string, unknown>) => void
   updateBackground: (scene: string) => void
   textSpeed?: number
   onMessageUpdate?: (messages: Message[]) => void
@@ -171,7 +171,7 @@ export default function ChatInterface({
     if (gameState.currentScene) {
       // Debug: log the scene id
       console.log("Updating background for scene:", gameState.currentScene);
-      updateBackgroundRef.current(gameState.currentScene);
+      updateBackgroundRef.current(gameState.currentScene as string);
     }
   }, [gameState.currentScene]);
 
@@ -191,10 +191,10 @@ export default function ChatInterface({
   const availableLocations = getAvailableScenes().map((scene) => `${scene.name}: ${scene.description}`).join("\n")
 
   // Utility: Summarize game state for the prompt
-  function summarizeGameState(state: any) {
-    return `Current scene: ${state.currentScene}. Character relations: ${Object.entries(state.characterRelations)
+  function summarizeGameState(state: Record<string, unknown>) {
+    return `Current scene: ${state.currentScene as string}. Character relations: ${Object.entries(state.characterRelations as Record<string, number> )
       .map(([k, v]) => `${k}: ${v}`)
-      .join(", ")}. Visited locations: ${state.visitedLocations?.join(", ") || "none"}. Inventory: ${state.inventory?.join(", ") || "empty"}.`
+      .join(", ")}. Visited locations: ${(state.visitedLocations as string[])?.join(", ") || "none"}. Inventory: ${(state.inventory as string[])?.join(", ") || "empty"}.`
   }
 
   // Utility: Summarize the story so far, including what happened at each location
@@ -746,7 +746,7 @@ ${summarizeStory(messages, getSceneNameMap())}
     return null;
   };
 
-  const determineRespondingCharacter = (message: string, state: any, messages: Message[]): string => {
+  const determineRespondingCharacter = (message: string, state: Record<string, unknown>, messages: Message[]): string => {
     // If the user is performing an action or just walking around, use narrator
     if (/\*\*.*\*\*/.test(message) || /walk|look|explore|move|travel|go to|leave|arrive|enter|exit|observe|search|inspect|wander|around|scene|location|background/i.test(message)) {
       // If the message is not directed at a champion, use narrator
@@ -761,7 +761,7 @@ ${summarizeStory(messages, getSceneNameMap())}
       }
     }
     // If the scene has a default character, use them
-    const currentScene = state.currentScene;
+    const currentScene = state.currentScene as string;
     const scene = getAvailableScenes().find(s => s.id === currentScene);
     if (scene && scene.availableCharacters && scene.availableCharacters.length > 0) {
       // If the last non-player character is in this scene, keep the conversation with them
