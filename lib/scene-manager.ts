@@ -35,7 +35,7 @@ const scenes: Record<string, Scene> = {
     backgroundImage: "/images/locations/piltover-street-offical.jpg", 
     availableCharacters: ["jayce", "viktor"],
   },
-  "piltover-private-vault": {
+  "hextech-vault": {
     id: "hextech-vault",
     name: "Hextech Vault",
     description: "A private secure hextech vault in Piltover, sealed by intricate mechanisms and powered by glowing blue crystals, guarding valuable or dangerous technology.",
@@ -56,9 +56,9 @@ const scenes: Record<string, Scene> = {
     backgroundImage: "/images/locations/zaun-factory.png",  
     availableCharacters: ["viktor", "jinx"],
   },
-  "zaun-simmer-den": {
-    id: "simmer-den",
-    name: "Simmer Den",
+  "shimmer-den": {
+    id: "shimmer-den",
+    name: "Shimmer Den",
     description: "A hidden Shimmer den in Zaun, filled with makeshift lab equipment and glowing purple vials, where the dangerous substance is brewed and consumed in secrecy.",
     backgroundImage: "/images/locations/shimmer-den.png",  
     availableCharacters: ["viktor", "jinx"],
