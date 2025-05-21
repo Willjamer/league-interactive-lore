@@ -83,14 +83,15 @@ type GameState = {
 // Update the props type to include messages and setMessages
 // Add onCharacterChange prop
 type ChatInterfaceProps = {
-  gameState: GameState
-  setGameState: React.Dispatch<React.SetStateAction<GameState>>
-  updateBackground: (scene: string) => void
-  textSpeed?: number
-  onMessageUpdate?: (messages: Message[]) => void
-  messages?: Message[]
-  setMessages?: (messages: Message[]) => void
-  onCharacterChange?: (character: string) => void // NEW
+  gameState: GameState;
+  setGameState: React.Dispatch<React.SetStateAction<GameState>>;
+  updateBackground: (scene: string) => void;
+  textSpeed?: number;
+  onMessageUpdate?: (messages: Message[]) => void;
+  messages?: Message[];
+  setMessages?: (messages: Message[]) => void;
+  onCharacterChange?: (character: string) => void;
+  voiceEnabled?: boolean; // NEW
 }
 
 // Update the function signature to use the new props with defaults
@@ -102,7 +103,8 @@ export default function ChatInterface({
   onMessageUpdate = () => {},
   messages: propMessages,
   setMessages: propSetMessages,
-  onCharacterChange, // NEW
+  onCharacterChange,
+  voiceEnabled = true, // NEW
 }: ChatInterfaceProps) {
   // Use the messages from props if provided, otherwise use local state
   const [localMessages, setLocalMessages] = useState<Message[]>([
@@ -528,6 +530,15 @@ ${summarizeStory(messages, getSceneNameMap())}
       ;(setMessages as React.Dispatch<React.SetStateAction<Message[]>>)((prev: Message[]) => [...prev, responseMessage])
       // Simulate typing effect
       await typeOutResponse(setMessages as React.Dispatch<React.SetStateAction<Message[]>>, responseMessage, response, textSpeed)
+      // --- TTS: Play after typing effect, only for AI/NPC (not narrator/system) ---
+      if (
+        voiceEnabled &&
+        responseMessage.sender !== "narrator" &&
+        responseMessage.sender !== "system"
+      ) {
+        const spoken = extractBracketedMessage(responseMessage.text);
+        speakLine(spoken).catch((e) => console.error("TTS failed:", e));
+      }
     } catch (error) {
       console.error("Error getting response:", error)
       // Remove typing indicator
@@ -632,7 +643,7 @@ ${summarizeStory(messages, getSceneNameMap())}
     const scenes = getAvailableScenes();
     for (const scene of scenes) {
       // Accepts commands like "travel to X", "go to X", "move to X", "enter X", etc.
-      const pattern = new RegExp(`(travel|go|move|walk|head|enter|arrive|visit|explore|leave|exit)[^\w]{0,5}${scene.name.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&")}([^\w]|$)`, "i");
+      const pattern = new RegExp(`(travel|go|move|walk|head|enter|arrive|visit|explore|leave|exit|)[^\w]{0,5}${scene.name.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&")}([^\w]|$)`, "i");
       if (pattern.test(message)) {
         return scene.id;
       }
@@ -645,7 +656,7 @@ ${summarizeStory(messages, getSceneNameMap())}
     const lines = response.split(/\r?\n/);
     let locLineIdx = -1;
     for (let i = 0; i < lines.length; i++) {
-      if (lines[i].trim().startsWith('**Location:**')) {
+      if (lines[i].trim().startsWith('**Location:')) {
         locLineIdx = i;
         break;
       }
@@ -702,7 +713,8 @@ ${summarizeStory(messages, getSceneNameMap())}
     }
     ;(setMessages as React.Dispatch<React.SetStateAction<Message[]>>)((prev: Message[]) => [...prev, userMessage])
     setInputValue("")
-    setIsProcessing(true)
+    setIsProcessing(true
+    )
     const typingId = (Date.now() + 1).toString()
     // Set sender to blank for loading/typing message
     ;(setMessages as React.Dispatch<React.SetStateAction<Message[]>>)((prev: Message[]) => [
@@ -741,7 +753,21 @@ ${summarizeStory(messages, getSceneNameMap())}
       if (parsedSender !== "player" && parsedSender !== "system") {
         setCurrentCharacter(parsedSender)
       }
-      await typeOutResponse(setMessages as React.Dispatch<React.SetStateAction<Message[]>>, responseMessage, response, textSpeed)
+      await typeOutResponse(
+        setMessages as React.Dispatch<React.SetStateAction<Message[]>>,
+        responseMessage,
+        response,
+        textSpeed
+      );
+      // --- TTS: Play after typing effect, only for AI/NPC (not narrator/system) ---
+      if (
+        voiceEnabled &&
+        responseMessage.sender !== "narrator" &&
+        responseMessage.sender !== "system"
+      ) {
+        const spoken = extractBracketedMessage(responseMessage.text);
+        speakLine(spoken).catch((e) => console.error("TTS failed:", e));
+      }
     } catch (error) {
       console.error("Error processing message:", error)
       ;(setMessages as React.Dispatch<React.SetStateAction<Message[]>>)((prev: Message[]) => prev.filter((m: Message) => m.id !== typingId))
@@ -806,6 +832,200 @@ ${summarizeStory(messages, getSceneNameMap())}
       onCharacterChange(currentCharacter)
     }
   }, [currentCharacter, onCharacterChange])
+
+  // --- TTS: Canonical Implementation ---
+  const TTS_ENDPOINTS = [
+    "https://icyrick-dia-tts.hf.space/api/generate_audio",
+    "https://icyrick-dia-tts.hf.space/run/generate_audio"
+  ] as const;
+  let cachedTTSEndpoint: string | null =
+    typeof window !== "undefined" ? sessionStorage.getItem("ttsEndpoint") : null;
+  let currentAudio: HTMLAudioElement | null = null;
+
+  function pcmToWavBlob(int16: Int16Array, sampleRate: number): Blob {
+    const numChannels = 1;
+    const bitsPerSample = 16;
+    const byteRate = sampleRate * numChannels * bitsPerSample / 8;
+    const blockAlign = numChannels * bitsPerSample / 8;
+    const dataSize = int16.length * 2;
+    const buffer = new ArrayBuffer(44 + dataSize);
+    const view = new DataView(buffer);
+    view.setUint32(0, 0x52494646, false); // 'RIFF'
+    view.setUint32(4, 36 + dataSize, true);
+    view.setUint32(8, 0x57415645, false); // 'WAVE'
+    view.setUint32(12, 0x666d7420, false); // 'fmt '
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, byteRate, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, bitsPerSample, true);
+    view.setUint32(36, 0x64617461, false); // 'data'
+    view.setUint32(40, dataSize, true);
+    for (let i = 0; i < int16.length; i++) {
+      view.setInt16(44 + i * 2, int16[i], true);
+    }
+    return new Blob([buffer], { type: "audio/wav" });
+  }
+
+  async function speakLine(text: string): Promise<void> {
+    const ttsPayload = {
+      data: [text, null, 3072, 3, 1.3, 0.95, 35, 0.94],
+    };
+    const endpoints = [
+      ...(cachedTTSEndpoint ? [cachedTTSEndpoint] : []),
+      ...TTS_ENDPOINTS,
+    ].filter((v, i, arr) => arr.indexOf(v) === i);
+    let lastError: any = null;
+    for (const endpoint of endpoints) {
+      let attempt = 0;
+      while (attempt < 2) {
+        try {
+          if (currentAudio) {
+            currentAudio.pause();
+            currentAudio.currentTime = 0;
+            currentAudio = null;
+          }
+          const response = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(ttsPayload),
+          });
+          if (!response.ok) {
+            if ([404, 405, 502].includes(response.status) || (response.status === 503 && attempt === 1)) {
+              cachedTTSEndpoint = null;
+              if (typeof window !== "undefined") sessionStorage.removeItem("ttsEndpoint");
+              attempt = 2; // break inner loop
+              continue;
+            }
+            if (response.status === 503 && attempt === 0) {
+              await new Promise((res) => setTimeout(res, 4000));
+              attempt++;
+              continue;
+            }
+            alert("Text-to-speech service is currently unavailable. Please try again later.");
+            return;
+          }
+          const result = await response.json();
+          // Handle base64 WAV
+          if (
+            Array.isArray(result.data) &&
+            typeof result.data[0] === "string" &&
+            result.data[0].startsWith("data:audio/wav;base64,")
+          ) {
+            if (!cachedTTSEndpoint) {
+              cachedTTSEndpoint = endpoint;
+              if (typeof window !== "undefined") sessionStorage.setItem("ttsEndpoint", endpoint);
+            }
+            const audio = new Audio(result.data[0]);
+            currentAudio = audio;
+            audio.play().catch((e) => {
+              console.warn("autoplay", e);
+              alert("Click to enable audio");
+            });
+            audio.onended = () => {
+              if (currentAudio === audio) currentAudio = null;
+            };
+            return;
+          }
+          // Handle PCM: { data: [[sampleRate, pcmArray]] }
+          if (
+            Array.isArray(result.data) &&
+            Array.isArray(result.data[0]) &&
+            result.data[0].length === 2 &&
+            typeof result.data[0][0] === "number"
+          ) {
+            if (!cachedTTSEndpoint) {
+              cachedTTSEndpoint = endpoint;
+              if (typeof window !== "undefined") sessionStorage.setItem("ttsEndpoint", endpoint);
+            }
+            const [sampleRate, pcmArrayRaw] = result.data[0];
+            let pcmArray: number[];
+            if (Array.isArray(pcmArrayRaw) && pcmArrayRaw.length > 0 && Array.isArray(pcmArrayRaw[0])) {
+              pcmArray = pcmArrayRaw.flat();
+            } else {
+              pcmArray = pcmArrayRaw;
+            }
+            // Convert float to Int16 if needed
+            let isFloat = false;
+            for (let i = 0; i < Math.min(10, pcmArray.length); i++) {
+              if (Math.abs(pcmArray[i]) <= 1.01) {
+                isFloat = true;
+                break;
+              }
+            }
+            const int16 = new Int16Array(pcmArray.length);
+            if (isFloat) {
+              for (let i = 0; i < pcmArray.length; i++) {
+                let s = Math.max(-1, Math.min(1, pcmArray[i]));
+                int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+              }
+            } else {
+              for (let i = 0; i < pcmArray.length; i++) {
+                int16[i] = pcmArray[i];
+              }
+            }
+            const wavBlob = pcmToWavBlob(int16, sampleRate);
+            const wavUrl = URL.createObjectURL(wavBlob);
+            const audio = new Audio(wavUrl);
+            currentAudio = audio;
+            audio.play().catch((e) => {
+              console.warn("autoplay", e);
+              alert("Click to enable audio");
+            });
+            audio.onended = () => {
+              if (currentAudio === audio) {
+                currentAudio = null;
+                URL.revokeObjectURL(wavUrl);
+              }
+            };
+            return;
+          }
+          // Unrecognised payload
+          throw new Error("TTS API returned unrecognised payload shape");
+        } catch (err) {
+          lastError = err;
+          if (cachedTTSEndpoint) {
+            cachedTTSEndpoint = null;
+            if (typeof window !== "undefined") sessionStorage.removeItem("ttsEndpoint");
+          }
+          attempt = 2; // break inner loop
+          continue;
+        }
+      }
+    }
+    alert("Text-to-speech service encountered an error. Please try again later.");
+    if (lastError) {
+      console.error("TTS final error:", lastError);
+    }
+  }
+
+  if (typeof window !== "undefined") {
+    (window as any).clearTTSCache = () => {
+      cachedTTSEndpoint = null;
+      sessionStorage.removeItem("ttsEndpoint");
+      console.log("[TTS] cache cleared");
+    };
+  }
+
+  // --- Only trigger TTS for the latest AI/NPC message ---
+  useEffect(() => {
+    if (!voiceEnabled) return;
+    const lastMsg = messages[messages.length - 1];
+    if (
+      lastMsg &&
+      lastMsg.sender !== "player" &&
+      lastMsg.sender !== "system" &&
+      lastMsg.sender !== "narrator" &&
+      !lastMsg.isTyping &&
+      lastMsg.text
+    ) {
+      const spoken = extractBracketedMessage(lastMsg.text);
+      speakLine(spoken).catch((e) => console.error("TTS failed:", e));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, voiceEnabled]);
 
   return (
     <div className="w-full max-w-4xl flex flex-col">
@@ -923,7 +1143,7 @@ ${summarizeStory(messages, getSceneNameMap())}
                         className={cn(
                           "relative mt-1 rounded-lg p-3 text-base max-w-[600px]",
                           message.isTyping ? "min-w-[60px]" : "",
-                          message.sender !== "" ? `${getCharacter(message.sender)?.color} ${getCharacter(message.sender)?.textColor}` : "bg-transparent text-transparent"
+                          message.sender !== "" ? (getCharacter(message.sender)?.color + " " + getCharacter(message.sender)?.textColor) : "bg-transparent text-transparent"
                         )}
                       >
                         {message.isTyping ? (
@@ -1021,3 +1241,4 @@ ${summarizeStory(messages, getSceneNameMap())}
     </div>
   )
 }
+
