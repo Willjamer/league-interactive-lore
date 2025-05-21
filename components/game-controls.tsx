@@ -53,11 +53,6 @@ export default function GameControls({
     }
   }, [])
 
-  // Toggle audio icon state only - no actual audio playback
-  const toggleAudioIcon = () => {
-    setIsAudioMuted(!isAudioMuted)
-  }
-
   // Add a function to handle save with messages
   const handleSave = () => {
     // Call the onSave function which will now handle messages too

@@ -7,7 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 import { getGeminiChatResponse, LLMMessage } from "@/lib/llm"
-import { Loader2, Send, ArrowRight, RefreshCw, Pencil, Trash2 } from "lucide-react"
+import { Loader2, Send, ArrowRight, RefreshCw } from "lucide-react"
 import type { Message } from "@/types/message" // Import Message type
 import { getAvailableScenes } from "@/lib/scene-manager"
 
@@ -171,8 +171,8 @@ export default function ChatInterface({
     }
   }, [messages, gameState])
 
-  // Add a function to load saved messages
-  const loadSavedMessages = () => {
+  // Move loadSavedMessages outside the component to avoid useEffect dependency warning
+  const loadSavedMessages = (setMessages: (messages: Message[]) => void) => {
     import("@/lib/game-storage").then(({ loadAutoSavedGame }) => {
       const savedData = loadAutoSavedGame()
       if (savedData && savedData.messages && savedData.messages.length > 0) {
@@ -183,7 +183,7 @@ export default function ChatInterface({
 
   // Add useEffect to load saved messages on component mount
   useEffect(() => {
-    loadSavedMessages()
+    loadSavedMessages(setMessages)
   }, [])
 
   // Always update background when currentScene changes
@@ -198,10 +198,94 @@ export default function ChatInterface({
     }
   }, [gameState.currentScene]);
 
-  // Add functions for editing and deleting messages
-  const handleEditMessage = (message: Message) => {
-    setEditingMessageId(message.id)
-    setEditValue(message.text)
+  // Update the handleSaveEdit function to regenerate the AI response after editing
+
+  const handleSaveEdit = async () => {
+    if (editingMessageId && editValue.trim() !== "") {
+      const messageIndex = messages.findIndex((m) => m.id === editingMessageId)
+      ;(setMessages as React.Dispatch<React.SetStateAction<Message[]>>)((prev: Message[]) =>
+        prev.map((m: Message) =>
+          m.id === editingMessageId
+            ? { ...m, text: editValue, timestamp: Date.now() }
+            : m,
+        ),
+      )
+      if (
+        messageIndex !== -1 &&
+        messages[messageIndex].sender === "player" &&
+        messageIndex < messages.length - 1 &&
+        messages[messageIndex + 1].sender !== "player"
+      ) {
+        const aiResponseToRegenerate = messages[messageIndex + 1]
+        ;(setMessages as React.Dispatch<React.SetStateAction<Message[]>>)((prev: Message[]) =>
+          prev.filter((m: Message) => m.id !== aiResponseToRegenerate.id),
+        )
+        setEditingMessageId(null)
+        setEditValue("")
+        setIsProcessing(true)
+        const typingId = Date.now().toString()
+        const respondingCharacter = determineRespondingCharacter(editValue, gameState, messages)
+        ;(setMessages as React.Dispatch<React.SetStateAction<Message[]>>)((prev: Message[]) => [
+          ...prev,
+          {
+            id: typingId,
+            sender: respondingCharacter,
+            text: "",
+            timestamp: Date.now(),
+            isTyping: true,
+          },
+        ])
+        try {
+          const llmMessages: LLMMessage[] = [
+            { role: "system", content: SYSTEM_PROMPT },
+            ...messages.slice(0, messageIndex + 1).slice(-5).map((m) => ({
+              role: m.sender === "player" ? "user" as const : "assistant" as const,
+              content: m.text,
+            })),
+          ]
+          const response = await getGeminiChatResponse(llmMessages, OPENROUTER_API_KEY)
+          ;(setMessages as React.Dispatch<React.SetStateAction<Message[]>>)((prev: Message[]) =>
+            prev.filter((m: Message) => m.id !== typingId),
+          )
+          const responseMessage: Message = {
+            id: (Date.now() + 2).toString(),
+            sender: respondingCharacter,
+            text: response,
+            timestamp: Date.now(),
+          }
+          ;(setMessages as React.Dispatch<React.SetStateAction<Message[]>>)((prev: Message[]) => [...prev, responseMessage])
+        } catch (error) {
+          console.error("Error regenerating response after edit:", error)
+          ;(setMessages as React.Dispatch<React.SetStateAction<Message[]>>)((prev: Message[]) =>
+            prev.filter((m: Message) => m.id !== typingId),
+          )
+          ;(setMessages as React.Dispatch<React.SetStateAction<Message[]>>)((prev: Message[]) => [
+            ...prev,
+            {
+              id: (Date.now() + 3).toString(),
+              sender: "system",
+              text: "There was an error generating a response to your edited message. Please try again.",
+              timestamp: Date.now(),
+            },
+          ])
+        } finally {
+          setIsProcessing(false)
+          setTimeout(() => {
+            inputRef.current?.focus()
+          }, 100)
+        }
+      } else {
+        setEditingMessageId(null)
+        setEditValue("")
+      }
+    } else {
+      handleCancelEdit()
+    }
+  }
+
+  const handleCancelEdit = () => {
+    setEditingMessageId(null)
+    setEditValue("")
   }
 
   // TODO: Replace with a secure way to provide the OpenRouter API key (e.g., env var, serverless function, or user input)
@@ -318,119 +402,6 @@ ${summarizeStory(messages, getSceneNameMap())}
       return match[1].trim();
     }
     return text; // fallback: show full text if brackets not found
-  }
-
-  // Update the handleSaveEdit function to regenerate the AI response after editing
-
-  const handleSaveEdit = async () => {
-    if (editingMessageId && editValue.trim() !== "") {
-      const messageIndex = messages.findIndex((m) => m.id === editingMessageId)
-      ;(setMessages as React.Dispatch<React.SetStateAction<Message[]>>)((prev: Message[]) =>
-        prev.map((m: Message) =>
-          m.id === editingMessageId
-            ? { ...m, text: editValue, timestamp: Date.now() }
-            : m,
-        ),
-      )
-      if (
-        messageIndex !== -1 &&
-        messages[messageIndex].sender === "player" &&
-        messageIndex < messages.length - 1 &&
-        messages[messageIndex + 1].sender !== "player"
-      ) {
-        const aiResponseToRegenerate = messages[messageIndex + 1]
-        ;(setMessages as React.Dispatch<React.SetStateAction<Message[]>>)((prev: Message[]) =>
-          prev.filter((m: Message) => m.id !== aiResponseToRegenerate.id),
-        )
-        setEditingMessageId(null)
-        setEditValue("")
-        setIsProcessing(true)
-        const typingId = Date.now().toString()
-        const respondingCharacter = determineRespondingCharacter(editValue, gameState, messages)
-        ;(setMessages as React.Dispatch<React.SetStateAction<Message[]>>)((prev: Message[]) => [
-          ...prev,
-          {
-            id: typingId,
-            sender: respondingCharacter,
-            text: "",
-            timestamp: Date.now(),
-            isTyping: true,
-          },
-        ])
-        try {
-          const llmMessages: LLMMessage[] = [
-            { role: "system", content: SYSTEM_PROMPT },
-            ...messages.slice(0, messageIndex + 1).slice(-5).map((m) => ({
-              role: m.sender === "player" ? "user" as const : "assistant" as const,
-              content: m.text,
-            })),
-          ]
-          const response = await getGeminiChatResponse(llmMessages, OPENROUTER_API_KEY)
-          ;(setMessages as React.Dispatch<React.SetStateAction<Message[]>>)((prev: Message[]) =>
-            prev.filter((m: Message) => m.id !== typingId),
-          )
-          const responseMessage: Message = {
-            id: (Date.now() + 2).toString(),
-            sender: respondingCharacter,
-            text: response,
-            timestamp: Date.now(),
-          }
-          ;(setMessages as React.Dispatch<React.SetStateAction<Message[]>>)((prev: Message[]) => [...prev, responseMessage])
-        } catch (error) {
-          console.error("Error regenerating response after edit:", error)
-          ;(setMessages as React.Dispatch<React.SetStateAction<Message[]>>)((prev: Message[]) =>
-            prev.filter((m: Message) => m.id !== typingId),
-          )
-          ;(setMessages as React.Dispatch<React.SetStateAction<Message[]>>)((prev: Message[]) => [
-            ...prev,
-            {
-              id: (Date.now() + 3).toString(),
-              sender: "system",
-              text: "There was an error generating a response to your edited message. Please try again.",
-              timestamp: Date.now(),
-            },
-          ])
-        } finally {
-          setIsProcessing(false)
-          setTimeout(() => {
-            inputRef.current?.focus()
-          }, 100)
-        }
-      } else {
-        setEditingMessageId(null)
-        setEditValue("")
-      }
-    } else {
-      handleCancelEdit()
-    }
-  }
-
-  const handleCancelEdit = () => {
-    setEditingMessageId(null)
-    setEditValue("")
-  }
-
-  const handleDeleteMessage = (messageId: string) => {
-    // Find the index of the message to delete
-    const messageIndex = messages.findIndex((m) => m.id === messageId)
-
-    // If it's the last player message, also delete the AI response that follows it
-    if (
-      messageIndex !== -1 &&
-      messages[messageIndex].sender === "player" &&
-      messageIndex < messages.length - 1 &&
-      messages[messageIndex + 1].sender !== "player"
-    ) {
-      // Delete both the player message and the AI response
-      ;(setMessages as React.Dispatch<React.SetStateAction<Message[]>>)((prev: Message[]) =>
-        prev.filter((m: Message, i: number) => i !== messageIndex && i !== messageIndex + 1),
-      )
-    } else {
-      // Just delete the single message
-      ;(setMessages as React.Dispatch<React.SetStateAction<Message[]>>)((prev: Message[]) =>
-        prev.filter((m: Message) => m.id !== messageId),
-      )
-    }
   }
 
   // Utility: Get character info by sender
@@ -783,6 +754,7 @@ ${summarizeStory(messages, getSceneNameMap())}
     }
   }
 
+  // Utility: Get the last non-player character
   const getLastNonPlayerCharacter = (messages: Message[]): string | null => {
     for (let i = messages.length - 1; i >= 0; i--) {
       const m = messages[i];
@@ -793,6 +765,7 @@ ${summarizeStory(messages, getSceneNameMap())}
     return null;
   };
 
+  // Utility: Determine responding character
   const determineRespondingCharacter = (message: string, state: Record<string, unknown>, messages: Message[]): string => {
     // If the user is performing an action or just walking around, use narrator
     if (/\*\*.*\*\*/.test(message) || /walk|look|explore|move|travel|go to|leave|arrive|enter|exit|observe|search|inspect|wander|around|scene|location|background/i.test(message)) {
