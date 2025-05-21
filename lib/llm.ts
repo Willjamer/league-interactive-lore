@@ -16,7 +16,7 @@ export async function getGeminiChatResponse(messages: LLMMessage[], apiKey: stri
       ...(siteTitle ? { 'X-Title': siteTitle } : {}),
     },
     body: JSON.stringify({
-      model: 'google/gemini-flash-1.5',
+      model: 'google/gemini-2.0-flash-001',
       messages,
     }),
   });
