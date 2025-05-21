@@ -7,7 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 import { getGeminiChatResponse, LLMMessage } from "@/lib/llm"
-import { Loader2, Send, ArrowRight, RefreshCw } from "lucide-react"
+import { Loader2, Send, ArrowRight } from "lucide-react"
 import type { Message } from "@/types/message" // Import Message type
 import { getAvailableScenes } from "@/lib/scene-manager"
 
@@ -522,6 +522,7 @@ ${summarizeStory(messages, getSceneNameMap())}
   }
 
   // Add a function to handle the regenerate action
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars 
   const handleRegenerateResponse = async () => {
     if (isProcessing || isRegenerating) return
 
@@ -552,6 +553,7 @@ ${summarizeStory(messages, getSceneNameMap())}
         isTyping: true,
       },
     ])
+    
 
     let response = ""
     let responseMessage: Message | null = null
