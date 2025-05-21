@@ -560,16 +560,17 @@ ${summarizeStory(messages, getSceneNameMap())}
     const maxAttempts = 3
 
     try {
+      const baseMessages = messages.filter(
+      m => m.id !== lastAIMessage.id && !m.isTyping        // drop the AI turn and any typing placeholders
+    )
       while (attempts < maxAttempts && !meaningful) {
         attempts++
-        // Call the API to get a new response for the same player message
-        const llmMessages = buildLLMMessages(messages, SYSTEM_PROMPT)
+
+        const llmMessages = buildLLMMessages(baseMessages, SYSTEM_PROMPT)
         response = await getGeminiChatResponse(llmMessages, OPENROUTER_API_KEY)
 
-        // Check for a non-empty [MESSAGE] block
-        const match = response.match(/\[MESSAGE\]([\s\S]*?)\[\/MESSAGE\]/i)
-        const messageContent = match ? match[1].trim() : ""
-        meaningful = !!messageContent && messageContent.length > 2 && !/^story summary|^summary|^\s*$/i.test(messageContent)
+        const inner = response.match(/\[MESSAGE\]([\s\S]*?)\[\/MESSAGE\]/i)?.[1].trim() ?? ""
+        meaningful = inner.length > 2 && !/^story summary|^summary$/i.test(inner)
       }
 
       // Remove typing indicator
@@ -930,20 +931,6 @@ ${summarizeStory(messages, getSceneNameMap())}
                         message.sender !== "system" &&
                         message.id === messages[messages.length - 1].id && (
                           <div className="flex justify-start mt-1 gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleRegenerateResponse()}
-                              disabled={isProcessing || isRegenerating}
-                              className="h-6 px-2 text-xs text-white/70 hover:text-white hover:bg-white/10"
-                            >
-                              {isRegenerating ? (
-                                <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                              ) : (
-                                <RefreshCw className="h-3 w-3 mr-1" />
-                              )}
-                              Regenerate
-                            </Button>
                             <Button
                               onClick={handleContinue}
                               disabled={isProcessing}
