@@ -60,7 +60,7 @@ const scenes: Record<string, Scene> = {
     id: "simmer-den",
     name: "Simmer Den",
     description: "A hidden Shimmer den in Zaun, filled with makeshift lab equipment and glowing purple vials, where the dangerous substance is brewed and consumed in secrecy.",
-    backgroundImage: "/images/locations/shimmer den.png",  
+    backgroundImage: "/images/locations/shimmer-den.png",  
     availableCharacters: ["viktor", "jinx"],
   },
   "boundary-market": {
