@@ -1,7 +1,7 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { Menu, Save, Upload, Settings, Volume2, VolumeX } from "lucide-react"
+import { Menu, Save, Upload, Settings } from "lucide-react"
 import { useState, useEffect } from "react"
 import {
   DropdownMenu,
@@ -34,8 +34,6 @@ export default function GameControls({
   const [showSettings, setShowSettings] = useState(false)
   // Keep only the UI state for audio - no actual audio playback
   const [isAudioMuted, setIsAudioMuted] = useState(true)
-  // Add volume state for the slider in settings
-  const [volume, setVolume] = useState(50)
 
   // Add a notification when auto-save happens
   const [showAutoSaveNotification, setShowAutoSaveNotification] = useState(false)
@@ -102,17 +100,6 @@ export default function GameControls({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-
-        {/* Add audio toggle button - visual only */}
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={toggleAudioIcon}
-          className="bg-black/30 border-white/30 text-white hover:bg-black/50 hover:text-white"
-          title={isAudioMuted ? "Audio muted" : "Audio enabled"}
-        >
-          {isAudioMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-        </Button>
       </div>
 
       {/* Right side controls - text speed control removed */}
@@ -125,21 +112,6 @@ export default function GameControls({
             <DialogDescription className="text-white/70">Adjust your game settings here.</DialogDescription>
           </DialogHeader>
           <div className="py-4">
-            <div className="flex items-center justify-between mb-4">
-              <span>Volume</span>
-              <div className="flex items-center gap-2 w-48">
-                <Volume2 className="h-4 w-4 text-white/70" />
-                <Slider
-                  value={[volume]}
-                  max={100}
-                  step={1}
-                  onValueChange={(value) => setVolume(value[0])}
-                  className="flex-1"
-                />
-                <span className="text-sm text-white/70 w-8">{volume}%</span>
-              </div>
-            </div>
-
             <div className="flex items-center justify-between mb-4">
               <span>Text Speed</span>
               <div className="w-48">

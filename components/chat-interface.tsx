@@ -51,13 +51,13 @@ const characters: Record<string, { name: string; avatar: string; color: string; 
   },
   player: {
     name: "You",
-    avatar: "/images/player.png",
+    avatar: "https://ddragon.leagueoflegends.com/cdn/15.10.1/img/profileicon/16.png",
     color: "bg-slate-100 border-slate-300",
     textColor: "text-slate-800",
   },
   narrator: {
     name: "Narrator",
-    avatar: "/images/globe.svg", // Use a neutral or world icon
+    avatar: "https://ddragon.leagueoflegends.com/cdn/15.10.1/img/profileicon/8.png", // Use a neutral or world icon
     color: "bg-gray-900 border-gray-400",
     textColor: "text-gray-100",
   },
@@ -582,31 +582,55 @@ ${summarizeStory(messages, getSceneNameMap())}
       },
     ])
 
+    let response = ""
+    let responseMessage: Message | null = null
+    let meaningful = false
+    let attempts = 0
+    const maxAttempts = 3
+
     try {
-      // Call the API to get a new response for the same player message
-      const llmMessages = buildLLMMessages(messages, SYSTEM_PROMPT)
-      const response = await getGeminiChatResponse(llmMessages, OPENROUTER_API_KEY)
+      while (attempts < maxAttempts && !meaningful) {
+        attempts++
+        // Call the API to get a new response for the same player message
+        const llmMessages = buildLLMMessages(messages, SYSTEM_PROMPT)
+        response = await getGeminiChatResponse(llmMessages, OPENROUTER_API_KEY)
+
+        // Check for a non-empty [MESSAGE] block
+        const match = response.match(/\[MESSAGE\]([\s\S]*?)\[\/MESSAGE\]/i)
+        const messageContent = match ? match[1].trim() : ""
+        meaningful = !!messageContent && messageContent.length > 2 && !/^story summary|^summary|^\s*$/i.test(messageContent)
+      }
 
       // Remove typing indicator
       ;(setMessages as React.Dispatch<React.SetStateAction<Message[]>>)((prev: Message[]) => prev.filter((m: Message) => m.id !== typingId))
 
-      // Add the new response message with typing effect
-      const responseMessage: Message = {
-        id: (Date.now() + 2).toString(),
-        sender: lastAIMessage.sender,
-        text: response,
-        timestamp: Date.now(),
+      if (meaningful) {
+        // Add the new response message with typing effect
+        responseMessage = {
+          id: (Date.now() + 2).toString(),
+          sender: lastAIMessage.sender,
+          text: response,
+          timestamp: Date.now(),
+        }
+        ;(setMessages as React.Dispatch<React.SetStateAction<Message[]>>)((prev: Message[]) => [...prev, responseMessage!])
+        // Simulate typing effect
+        await typeOutResponse(setMessages as React.Dispatch<React.SetStateAction<Message[]>>, responseMessage, response, textSpeed)
+      } else {
+        // All attempts failed
+        ;(setMessages as React.Dispatch<React.SetStateAction<Message[]>>)((prev: Message[]) => [
+          ...prev,
+          {
+            id: (Date.now() + 3).toString(),
+            sender: "system",
+            text: "Could not generate a meaningful response after several attempts. Please try again.",
+            timestamp: Date.now(),
+          },
+        ])
       }
-
-      ;(setMessages as React.Dispatch<React.SetStateAction<Message[]>>)((prev: Message[]) => [...prev, responseMessage])
-
-      // Simulate typing effect
-      await typeOutResponse(setMessages as React.Dispatch<React.SetStateAction<Message[]>>, responseMessage, response, textSpeed)
     } catch (error) {
       console.error("Error regenerating response:", error)
       // Remove typing indicator
       ;(setMessages as React.Dispatch<React.SetStateAction<Message[]>>)((prev: Message[]) => prev.filter((m: Message) => m.id !== typingId))
-
       // Add error message
       ;(setMessages as React.Dispatch<React.SetStateAction<Message[]>>)((prev: Message[]) => [
         ...prev,
@@ -619,7 +643,6 @@ ${summarizeStory(messages, getSceneNameMap())}
       ])
     } finally {
       setIsRegenerating(false)
-
       // Refocus the input box after processing is complete
       setTimeout(() => {
         inputRef.current?.focus()
@@ -869,28 +892,7 @@ ${summarizeStory(messages, getSceneNameMap())}
                         // Display mode
                         <div className="mt-1 rounded-lg p-3 text-base max-w-[600px] bg-indigo-600 text-white relative group">
                           {message.text}
-
-                          {/* Edit and Delete buttons for player messages */}
-                          <div className="absolute -left-16 top-1/2 transform -translate-y-1/2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleEditMessage(message)}
-                              className="h-7 w-7 rounded-full bg-black/30 text-white hover:bg-black/50"
-                              title="Edit message"
-                            >
-                              <Pencil className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDeleteMessage(message.id)}
-                              className="h-7 w-7 rounded-full bg-black/30 text-white hover:bg-black/50"
-                              title="Delete message"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
+                          {/* Edit and Delete buttons for player messages removed */}
                         </div>
                       )}
                     </div>
@@ -958,7 +960,7 @@ ${summarizeStory(messages, getSceneNameMap())}
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={handleRegenerateResponse}
+                              onClick={() => handleRegenerateResponse()}
                               disabled={isProcessing || isRegenerating}
                               className="h-6 px-2 text-xs text-white/70 hover:text-white hover:bg-white/10"
                             >
