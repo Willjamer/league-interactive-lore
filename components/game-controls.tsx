@@ -32,8 +32,6 @@ export default function GameControls({
   onTextSpeedChange = () => {},
 }: GameControlsProps) {
   const [showSettings, setShowSettings] = useState(false)
-  // Keep only the UI state for audio - no actual audio playback
-  const [isAudioMuted, setIsAudioMuted] = useState(true)
 
   // Add a notification when auto-save happens
   const [showAutoSaveNotification, setShowAutoSaveNotification] = useState(false)
